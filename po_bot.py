@@ -4,27 +4,28 @@ import random
 import time
 from datetime import datetime, timedelta
 
+import numpy as np
 from selenium.webdriver.common.by import By
-
 from utils import companies, get_driver
 
-BASE_URL = 'https://pocketoption.com'  # change if PO is blocked in your country
+BASE_URL = 'https://pocketoption.com'
 LENGTH_STACK_MIN = 460
-LENGTH_STACK_MAX = 1000  # 4000
 PERIOD = 60  # PERIOD on the graph
-TIME = 1  # quotes
+LENGTH_STACK_MAX = 1000
+PERIOD = 60
+TIME = 1
 SMA_LONG = 50
 SMA_SHORT = 8
-PERCENTAGE = 0.91  # create orders more than PERCENTAGE
-STACK = {}  # {1687021970: 0.87, 1687021971: 0.88}
-ACTIONS = {}  # dict of {datetime: value} when an action has been made
+PERCENTAGE = 0.91
+STACK = {}
+ACTIONS = {}
 MAX_ACTIONS = 1
-ACTIONS_SECONDS = PERIOD - 1  # how long action still in ACTIONS
+ACTIONS_SECONDS = PERIOD - 1
 LAST_REFRESH = datetime.now()
 CURRENCY = None
 CURRENCY_CHANGE = False
 CURRENCY_CHANGE_DATE = datetime.now()
-HISTORY_TAKEN = False  # becomes True when history is taken. History length is 900-1800
+HISTORY_TAKEN = False
 CLOSED_TRADES_LENGTH = 3
 MODEL = None
 SCALER = None
@@ -32,6 +33,7 @@ PREVIOUS = 1200
 MAX_DEPOSIT = 0
 MIN_DEPOSIT = 0
 INIT_DEPOSIT = None
+
 NUMBERS = {
     '0': '11',
     '1': '7',
@@ -45,33 +47,51 @@ NUMBERS = {
     '9': '3',
 }
 IS_AMOUNT_SET = True
-AMOUNTS = []  # 1, 3, 8, 18, 39, 82, 172
-EARNINGS = 15  # euros.
-MARTINGALE_COEFFICIENT = 2.0  # everything < 2 have worse profitability
+AMOUNTS = []
+EARNINGS = 15
+MARTINGALE_COEFFICIENT = 2.5
+
+# Define Ichimoku settings
+tenkanPeriod = 1
+kijunPeriod = 1
+senkouPeriod = 3
 
 driver = get_driver()
-
 
 def load_web_driver():
     url = f'{BASE_URL}/en/cabinet/demo-quick-high-low/'
     driver.get(url)
 
+def calculate_sma(data, period):
+    if len(data) < period:
+        return [np.nan] * len(data)  # Return NaNs if not enough data
+    return np.convolve(data, np.ones((period,)) / period, mode='valid')
+
+def get_ichimoku_values(stack):
+    values = list(stack.values())
+    hl2 = [(high + low) / 2 for high, low in zip(values, values)]  # Mocking high and low with same value, should be replaced with actual high-low data
+
+    if len(hl2) < max(tenkanPeriod, kijunPeriod, senkouPeriod):
+        return None
+
+    tenkan_sen = calculate_sma(hl2, tenkanPeriod)[-1]
+    kijun_sen = calculate_sma(hl2, kijunPeriod)[-1]
+    senkou_span_a = calculate_sma(hl2, (tenkanPeriod + kijunPeriod) // 2)[-1]
+    senkou_span_b = calculate_sma(hl2, senkouPeriod)[-1]
+    chikou_span = values[-1]
+
+    return tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span
 
 def change_currency():
     current_symbol = driver.find_element(by=By.CLASS_NAME, value='current-symbol')
     current_symbol.click()
-    # time.sleep(random.random())  # 0-1 sec
     currencies = driver.find_elements(By.XPATH, "//li[contains(., '92%')]")
     if currencies:
-        # click random currency
         while True:
             currency = random.choice(currencies)
             if CURRENCY not in currency.text:
-                break  # avoid repeats
+                break
         currency.click()
-    else:
-        pass
-
 
 def do_action(signal):
     action = True
@@ -87,7 +107,6 @@ def do_action(signal):
 
     if action:
         if len(ACTIONS) >= MAX_ACTIONS:
-            # print(f"Max actions reached, don't do a {signal} action")
             action = False
 
     if action:
@@ -106,11 +125,8 @@ def do_action(signal):
         except Exception as e:
             print(e)
 
-
 def hand_delay():
     time.sleep(random.choice([0.2, 0.3, 0.4, 0.5, 0.6]))
-    pass
-
 
 def get_amounts(amount):
     if amount > 1999:
@@ -124,7 +140,6 @@ def get_amounts(amount):
             print('Amounts:', amounts, 'init deposit:', INIT_DEPOSIT)
             return amounts
 
-
 def check_values(stack):
     try:
         deposit = driver.find_element(by=By.CSS_SELECTOR, value='body > div.wrapper > div.wrapper__top > header > div.right-block > div.right-block__item.js-drop-down-modal-open > div > div.balance-info-block__data > div.balance-info-block__balance > span')
@@ -136,7 +151,7 @@ def check_values(stack):
     if not INIT_DEPOSIT:
         INIT_DEPOSIT = float(deposit.text)
 
-    if not AMOUNTS:  # only for init purpose
+    if not AMOUNTS:
         AMOUNTS = get_amounts(float(deposit.text))
 
     if not IS_AMOUNT_SET:
@@ -177,18 +192,23 @@ def check_values(stack):
                     else:  # reset to 1
                         driver.find_element(by=By.CSS_SELECTOR, value=base % NUMBERS['1']).click()
                         hand_delay()
+                amount.send_keys(Keys.RETURN)  # Confirm the new amount
                 closed_tab_parent.click()
             except Exception as e:
                 print(e)
         IS_AMOUNT_SET = True
 
     if IS_AMOUNT_SET and datetime.now().second % 10 == 0:
+        ichimoku_values = get_ichimoku_values(stack)
+        if not ichimoku_values:
+            return
 
-        if list(stack.values())[-1] < list(stack.values())[-1 - PERIOD] < list(stack.values())[-1 - PERIOD * 2]:
-            do_action('put')
-        if list(stack.values())[-1] > list(stack.values())[-1 - PERIOD] > list(stack.values())[-1 - PERIOD * 2]:
+        tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span = ichimoku_values
+
+        if chikou_span > tenkan_sen:
             do_action('call')
-
+        elif chikou_span <= tenkan_sen:
+            do_action('put')
 
 def websocket_log(stack):
     global CURRENCY, CURRENCY_CHANGE, CURRENCY_CHANGE_DATE, LAST_REFRESH, HISTORY_TAKEN, MODEL, INIT_DEPOSIT
@@ -204,7 +224,7 @@ def websocket_log(stack):
     if CURRENCY_CHANGE and CURRENCY_CHANGE_DATE < datetime.now() - timedelta(seconds=5):
         stack = {}  # drop stack when currency changed
         HISTORY_TAKEN = False  # take history again
-        driver.refresh()  # refresh page to cut off unwanted signals
+        driver.refresh()
         CURRENCY_CHANGE = False
         MODEL = None
         INIT_DEPOSIT = None
@@ -240,11 +260,10 @@ def websocket_log(stack):
                     stack[int(timestamp)] = value
             elif len(stack) > LENGTH_STACK_MAX:
                 print(f"Len > {LENGTH_STACK_MAX}!!")
-                stack = {}  # refresh then
+                stack = {}
             if len(stack) >= LENGTH_STACK_MIN:
                 check_values(stack)
     return stack
-
 
 load_web_driver()
 while True:
