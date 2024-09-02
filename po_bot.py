@@ -309,7 +309,6 @@ PREVIOUS = 1200
 MAX_DEPOSIT = 0
 MIN_DEPOSIT = 0
 INIT_DEPOSIT = None
-INIT_AMOUNT=10
 
 NUMBERS = {
     '0': '11',
@@ -393,7 +392,7 @@ def do_action(signal):
 
     if action:
         try:
-            print(f"FinalResult:{datetime.now().strftime('%Y-%m-%d %H   :%M:%S')} {signal.upper()}, currency: {CURRENCY} last_value: {last_value}")
+            print(f"FinalResult:{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} {signal.upper()}, currency: {CURRENCY} last_value: {last_value}")
             action_button = wait_for_element(f'.btn-{signal}')
             if action_button:
                 action_button.click()
@@ -406,14 +405,6 @@ def hand_delay():
     time.sleep(random.choice([0.2, 0.3, 0.4, 0.5, 0.6]))
 
 def get_amounts(amount):
-    # index=0
-    # amounts=[]
-    # while index<6:
-    #     amount = int(INIT_AMOUNT*MARTINGALE_COEFFICIENT**index)
-    #     amounts.append(amount)
-    #     index+=1
-    # print("I am amounts:",amounts)
-    # return amounts
     if amount > 1999:
         amount = 1999
     amounts = []
@@ -468,34 +459,31 @@ def check_values(stack):
                 amount_value = int(amount.get_attribute('value')[1:])
                 base = '#modal-root > div > div > div > div > div.trading-panel-modal__in > div.virtual-keyboard.js-virtual-keyboard > div > div:nth-child(%s) > div'
                 if '0.00' not in last_split[4]:  # win
+                    print("I am winning")
                     if amount_value > 1:
-                        print("amount_value:",amount_value)
-                        print("I am winning")
                         amount.click()
                         hand_delay()
-                        numeric_button = wait_for_element(base % NUMBERS["1"])
+                        numeric_button = wait_for_element(base % NUMBERS['1'])
                         if numeric_button:
                             numeric_button.click()
                         AMOUNTS = get_amounts(float(deposit.text))  # refresh amounts
-                        print("Amounts:",AMOUNTS)
                 elif '0.00' not in last_split[3]:  # draw
                     print("I am drawing")
                     pass
                 else:  # lose
                     amount.click()
                     print("I am losing")
-                    print("Amounts:",AMOUNTS)
                     time.sleep(random.choice([0.6, 0.7, 0.8, 0.9, 1.0, 1.1]))
                     if amount_value in AMOUNTS and AMOUNTS.index(amount_value) + 1 < len(AMOUNTS):
                         next_amount = AMOUNTS[AMOUNTS.index(amount_value) + 1]
                         print("next_amount:", next_amount)
                         for number in str(next_amount):
-                            numeric_button = wait_for_element(base % NUMBERS["1"])
+                            numeric_button = wait_for_element(base % NUMBERS[number])
                             if numeric_button:
                                 numeric_button.click()
                                 hand_delay()
                     else:  # reset to 1
-                        numeric_button = wait_for_element(base % NUMBERS["1"])
+                        numeric_button = wait_for_element(base % NUMBERS['1'])
                         if numeric_button:
                             numeric_button.click()
                         hand_delay()
