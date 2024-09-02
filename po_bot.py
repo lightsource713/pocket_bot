@@ -288,7 +288,7 @@ from utils import companies, get_driver
 BASE_URL = 'https://pocketoption.com'
 LENGTH_STACK_MIN = 460
 LENGTH_STACK_MAX = 1000
-PERIOD = 10
+PERIOD = 5
 TIME = 1
 SMA_LONG = 50
 SMA_SHORT = 8
@@ -309,8 +309,8 @@ PREVIOUS = 1200
 MAX_DEPOSIT = 0
 MIN_DEPOSIT = 0
 INIT_DEPOSIT = None
-INIT_AMOUNT = 19
-INIT_TIME_FRAME = "00:00:39"
+INIT_AMOUNT = 1
+INIT_TIME_FRAME = "00:00:05"
 
 NUMBERS = {
     '0': '11',
@@ -572,10 +572,15 @@ def check_values(stack):
                                 numeric_button.click()
                                 hand_delay()
                     else:  # reset to 1
-                        numeric_button = wait_for_element(base % NUMBERS['1'])
-                        if numeric_button:
-                            numeric_button.click()
-                        hand_delay()
+                        # numeric_button = wait_for_element(base % NUMBERS['1'])
+                        # if numeric_button:
+                        #     numeric_button.click()
+                        # hand_delay()
+                        for number in str(INIT_AMOUNT):
+                            numeric_button = wait_for_element(base % NUMBERS[number])
+                            if numeric_button:
+                                numeric_button.click()
+                                hand_delay()
                 closed_tab_parent.click()
             except Exception as e:
                 print(e)
