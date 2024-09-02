@@ -288,7 +288,7 @@ from utils import companies, get_driver
 BASE_URL = 'https://pocketoption.com'
 LENGTH_STACK_MIN = 460
 LENGTH_STACK_MAX = 1000
-PERIOD = 5
+PERIOD = 10
 TIME = 1
 SMA_LONG = 50
 SMA_SHORT = 8
@@ -309,7 +309,8 @@ PREVIOUS = 1200
 MAX_DEPOSIT = 0
 MIN_DEPOSIT = 0
 INIT_DEPOSIT = None
-INIT_AMOUNT=10
+INIT_AMOUNT = 10
+INIT_TIME_FRAME = "00:00:10"
 
 NUMBERS = {
     '0': '11',
@@ -417,12 +418,90 @@ def get_amounts(amount):
     if amount > 1999:
         amount = 1999
     amounts = []
+    index = 0
     while True:
-        amount = int(amount / MARTINGALE_COEFFICIENT)
-        amounts.insert(0, amount)
-        if amounts[0] <= 1:
-            amounts[0] = 1
-            return amounts
+        if not INIT_AMOUNT:            
+            amount = int(amount / MARTINGALE_COEFFICIENT)
+            amounts.insert(0, amount)
+            if amounts[0] <= 1:
+                amounts[0] = 1
+                return amounts
+        else:
+            if (INIT_AMOUNT * MARTINGALE_COEFFICIENT**index) < amount: 
+                amounts.append(int(INIT_AMOUNT * MARTINGALE_COEFFICIENT**index))
+                index = index + 1
+            else: return amounts            
+
+def init_amount():
+    try:
+        closed_tab = wait_for_element('#bar-chart > div > div > div.right-widget-container > div > div.widget-slot__header > div.divider > ul > li:nth-child(2) > a')
+        if closed_tab is None:
+            return
+        closed_tab_parent = closed_tab.find_element(by=By.XPATH, value='..')
+        if closed_tab_parent.get_attribute('class') == '':
+            closed_tab_parent.click()
+    except:
+        pass
+
+    try:
+        amount = wait_for_element('#put-call-buttons-chart-1 > div > div.blocks-wrap > div.block.block--bet-amount > div.block__control.control > div.control__value.value.value--several-items > div > input[type=text]')
+        if amount is None:
+            return
+        base = '#modal-root > div > div > div > div > div.trading-panel-modal__in > div.virtual-keyboard.js-virtual-keyboard > div > div:nth-child(%s) > div'
+
+        amount.click()
+        hand_delay()
+
+        for number in str(INIT_AMOUNT):
+            numeric_button = wait_for_element(base % NUMBERS[number])
+
+            if numeric_button:
+                numeric_button.click()
+                hand_delay()
+        
+        closed_tab_parent.click()
+        
+    except Exception as e:
+        print(e)
+
+    time.sleep(1.0)
+
+def init_timeframe():
+    try:
+        timeDiv = wait_for_element('#put-call-buttons-chart-1 > div > div.blocks-wrap > div.block.block--expiration-inputs > div.block__control.control > div.control__value.value.value--several-items > div')
+
+        if timeDiv is None:
+            return
+        
+        timeDiv.click()
+        hand_delay()
+
+        plus_base = '#modal-root > div > div > div > div.trading-panel-modal__in > div:nth-child(%s) > a.btn-plus'
+        minus_base = '#modal-root > div > div > div > div.trading-panel-modal__in > div:nth-child(%s) > a.btn-minus'
+        
+        current = timeDiv.text.split(":")
+        target = INIT_TIME_FRAME.split(":")
+        print(f"Current : {current}, Target : {target}")
+
+        for i in range(3):
+            plus_button = wait_for_element(plus_base % (i + 1))
+            minus_button = wait_for_element(minus_base % (i + 1))
+
+            diff = int(target[i]) - int(current[i])
+
+            if i == 2 and target[0] == 0 and target[1] == 0: diff -= 5
+            for j in range(abs(diff)):
+                if diff < 0 : 
+                    minus_button.click()
+                    hand_delay()
+                else:
+                    plus_button.click()
+                    hand_delay()
+        
+    except Exception as e:
+        print(e)    
+
+    time.sleep(1.0)
 
 def check_values(stack):
     try:
@@ -469,13 +548,20 @@ def check_values(stack):
                 base = '#modal-root > div > div > div > div > div.trading-panel-modal__in > div.virtual-keyboard.js-virtual-keyboard > div > div:nth-child(%s) > div'
                 if '0.00' not in last_split[4]:  # win
                     if amount_value > 1:
-                        print("amount_value:",amount_value)
+                        print("amount_value:", amount_value)
                         print("I am winning")
                         amount.click()
                         hand_delay()
-                        numeric_button = wait_for_element(base % NUMBERS["1"])
-                        if numeric_button:
-                            numeric_button.click()
+                        if not INIT_AMOUNT:
+                            numeric_button = wait_for_element(base % NUMBERS["1"])
+                            if numeric_button:
+                                numeric_button.click()    
+                        else:
+                            for number in str(INIT_AMOUNT):
+                                numeric_button = wait_for_element(base % NUMBERS[number])
+                                if numeric_button:
+                                    numeric_button.click()
+                                    hand_delay()
                         AMOUNTS = get_amounts(float(deposit.text))  # refresh amounts
                         print("Amounts:",AMOUNTS)
                 elif '0.00' not in last_split[3]:  # draw
@@ -490,7 +576,7 @@ def check_values(stack):
                         next_amount = AMOUNTS[AMOUNTS.index(amount_value) + 1]
                         print("next_amount:", next_amount)
                         for number in str(next_amount):
-                            numeric_button = wait_for_element(base % NUMBERS["1"])
+                            numeric_button = wait_for_element(base % NUMBERS[number])
                             if numeric_button:
                                 numeric_button.click()
                                 hand_delay()
@@ -504,7 +590,7 @@ def check_values(stack):
                 print(e)
         IS_AMOUNT_SET = True
 
-    if IS_AMOUNT_SET and datetime.now().second % PERIOD == 0:
+    if IS_AMOUNT_SET and (datetime.now().hour * 3600 + datetime.now().minute * 60 + datetime.now().second) % PERIOD == 0:
         closes = list(stack.values())
         highs = [close + 0.5 for close in closes] # Mock highs with a small offset
         lows = [close - 0.5 for close in closes]  # Mock lows with a small offset
@@ -532,9 +618,15 @@ def websocket_log(stack):
         pass
 
     if CURRENCY_CHANGE and CURRENCY_CHANGE_DATE < datetime.now() - timedelta(seconds=5):
+        if INIT_AMOUNT:  # Initialize with init_amount
+            init_amount()
+
+        if INIT_TIME_FRAME:  # Initialize with init_time_frame
+            init_timeframe()
+            
         stack = {}  # drop stack when currency changed
         HISTORY_TAKEN = False  # take history again
-        driver.refresh()
+        driver.refresh()        
         CURRENCY_CHANGE = False
         MODEL = None
         INIT_DEPOSIT = None
