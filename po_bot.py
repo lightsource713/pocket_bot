@@ -13,7 +13,7 @@ from utils import companies, get_driver
 BASE_URL = 'https://pocketoption.com'
 LENGTH_STACK_MIN = 460
 LENGTH_STACK_MAX = 1000
-PERIOD =1
+PERIOD = 1
 TIME = 1
 SMA_LONG = 50
 SMA_SHORT = 8
@@ -36,6 +36,7 @@ MIN_DEPOSIT = 0
 INIT_DEPOSIT = None
 PREVIOUS_SPLIT=None
 PREVIOUS_DEPOSIT=None
+FIRST_BET = False
 
 NUMBERS = {
     '0': '11',
@@ -53,7 +54,7 @@ IS_AMOUNT_SET = True
 AMOUNTS = []
 EARNINGS = 15
 MARTINGALE_COEFFICIENT = 2.5
-INIT_AMOUNT= 100
+INIT_AMOUNT= 2
 STEP=6
 
 # Defined periods for Ichimoku elements
@@ -161,7 +162,7 @@ def check_values(stack):
     except Exception as e:
         print(e)
 
-    global IS_AMOUNT_SET, AMOUNTS, INIT_DEPOSIT,PREVIOUS_SPLIT,PREVIOUS_DEPOSIT
+    global IS_AMOUNT_SET, AMOUNTS, INIT_DEPOSIT,PREVIOUS_SPLIT,PREVIOUS_DEPOSIT,FIRST_BET
 
     if not INIT_DEPOSIT:
         INIT_DEPOSIT = float(deposit.text)
@@ -190,11 +191,11 @@ def check_values(stack):
             # PREVIOUS_DEPOSIT = float(deposit.text)
             print("PREVIOUS_DEPOSIT:",PREVIOUS_DEPOSIT)
             print("current_deposit:",float(current_deposit.text))
+            print("last_split:",last_split)
+            print("prev_split:",PREVIOUS_SPLIT)
             # if not PREVIOUS_SPLIT == None :
             #     return
             if PREVIOUS_SPLIT == last_split and PREVIOUS_DEPOSIT==float(current_deposit.text):    
-                print("last_split:",last_split)
-                print("prev_split:",PREVIOUS_SPLIT)
                 print("SAME")
                 return
             if len(last_split) < 5:  # Ensure last_split has expected elements
@@ -245,6 +246,7 @@ def check_values(stack):
 
     # if IS_AMOUNT_SET and datetime.now().second % PERIOD == 0:
     if IS_AMOUNT_SET:
+        
         closes = list(stack.values())
         ichimoku_values = calculate_ichimoku_elements(closes)
         current_price = closes[-1]
@@ -257,6 +259,11 @@ def check_values(stack):
             do_action('put')
         else:
             do_action('call')
+
+        if not FIRST_BET:
+            FIRST_BET = True
+            time.sleep(10)
+
 
 def websocket_log(stack):
     global CURRENCY, CURRENCY_CHANGE, CURRENCY_CHANGE_DATE, LAST_REFRESH, HISTORY_TAKEN, MODEL, INIT_DEPOSIT
@@ -272,7 +279,7 @@ def websocket_log(stack):
     if CURRENCY_CHANGE and CURRENCY_CHANGE_DATE < datetime.now() - timedelta(seconds=5):
         stack = {}  # drop stack when currency changed
         HISTORY_TAKEN = False  # take history again
-        time.sleep(10)
+        time.sleep(2)
         driver.refresh()
         CURRENCY_CHANGE = False
         MODEL = None
