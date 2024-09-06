@@ -1,1 +1,0 @@
-python po_bot.py
